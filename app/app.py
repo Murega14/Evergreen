@@ -24,6 +24,8 @@ login_manager.init_app(app)
 login_manager.session_protection = 'strong'
 login_manager.login_view = 'login'
 
+db.configure_mappers()
+
 #initializing the database
 with app.app_context():
     db.create_all()
@@ -46,7 +48,7 @@ def create_grocer():
     db.session.add(new_grocer)
     db.session.commit()
     
-    return jsonify({"Grocer Registration Succesful"}), 201
+    return jsonify({"message": "Grocer Registration Succesful"}), 201
 
 @app.route('/signup/farmer', methods=['POST'])
 def create_farmer():
@@ -64,7 +66,7 @@ def create_farmer():
     db.session.add(new_farmer)
     db.session.commit()
     
-    return jsonify({"Farmer Registration Successful"}), 201
+    return jsonify({"Message": "Farmer Registration Successful"}), 201
 
 @app.route('/login/grocer', methods=['POST'])
 def login_grocer():
@@ -85,7 +87,7 @@ def login_grocer():
 def login_farmer():
     data = request.get_json()
     identifier = data.get('identifier')
-    password = data.get('identifier')
+    password = data.get('password')
     
     farmer = Farmer.query.filter((Farmer.email == identifier) | (Farmer.phone_number == identifier)).first()
     
@@ -97,16 +99,16 @@ def login_farmer():
         return jsonify({"error": "Yeah something's not quite right try again"}), 401
     
 @app.route('/products', methods=['GET'])
-@jwt_required
+@jwt_required()
 def view_products():
-    current_user.id = get_jwt_identity()
+    current_user_id = get_jwt_identity()
     products = Product.query.all()
     return jsonify([product.to_dict() for product in products]), 200
 
 @app.route('/products/create', methods=['POST'])
-@jwt_required
+@jwt_required()
 def create_products():
-    current_user.id = get_jwt_identity()
+    user = get_jwt_identity()
     data = request.get_json()
     name = data.get('name')
     price = data.get('price')
@@ -121,9 +123,9 @@ def create_products():
 @app.route('/orders/create', methods=['POST'])
 @jwt_required()
 def create_order():
-    current_user.id = get_jwt_identity()
+    user = get_jwt_identity()
     data = request.get_json()
-    grocer_id = data.get('grocer_id')
+    grocer_id = user['id']
     product_ids = data.get('product_ids')
     
     grocer = Grocer.query.get(grocer_id)
@@ -143,8 +145,8 @@ def create_order():
 @app.route('/orders', methods=['GET'])
 @jwt_required()
 def get_farmerOrders():
-    current_user = get_jwt_identity()
-    farmer_id = current_user['id']
+    user = get_jwt_identity()
+    farmer_id = user['id']
     
     orders = Order.query.join(order_product).join(Product).filter(Product.farmer_id == farmer_id).all()
     order_list = []
@@ -161,10 +163,10 @@ def get_farmerOrders():
     return jsonify({"farmer_id": farmer_id, "orders": order_list}), 200
 
 @app.route('/my_orders', methods=['GET'])
-@jwt_required
+@jwt_required()
 def get_grocerOrders():
-    current_user = get_jwt_identity()
-    grocer_id = current_user['id']
+    user = get_jwt_identity()
+    grocer_id = user['id']
     
     orders = Order.query.filter_by(grocer_id=grocer_id).all()
     order_list = []
@@ -184,9 +186,6 @@ def get_grocerOrders():
         order_list.append(order_details)
         
     return jsonify({"grocer_id": grocer_id, "orders": order_list}), 200
-
-
-
 
 
 if __name__ == '__main__':

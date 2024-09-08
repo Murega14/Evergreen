@@ -2,9 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import MetaData
 
-metadata = MetaData(naming_convention={
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-})
+metadata = MetaData()
 
 db = SQLAlchemy(metadata=metadata)
 
@@ -19,11 +17,12 @@ class Grocer(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(), nullable=False, unique=False)
     phone_number = db.Column(db.String(), unique=True, nullable=False)
     stall_name = db.Column(db.String(), unique=True, nullable=False)
     stall_number = db.Column(db.Integer, unique=True, nullable=False)
     password_hash = db.Column(db.String(), nullable=False)
-    orders = db.relationship('Order', backref='grocer', lazy=True)
+    orders = db.relationship('Order', back_populates='grocer', lazy=True, cascade="all, delete-orphan")
     
     def hash_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -40,6 +39,7 @@ class Farmer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     phone_number = db.Column(db.String(), nullable=False, unique=True)
+    email = db.Column(db.String(), nullable=False, unique=True)
     password_hash = db.Column(db.String(), nullable=False)
     
     def hash_password(self, password):
@@ -55,7 +55,7 @@ class Product(db.Model):
     __tablename__ = 'products'
     
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(), nullable=False, index=True)
+    name = db.Column(db.String(60), nullable=False, index=True)
     price = db.Column(db.Integer, nullable=False)
     farmer_id = db.Column(db.Integer, db.ForeignKey('farmers.id'), nullable=False)
     farmer = db.relationship('Farmer', backref=db.backref('products', lazy=True))
@@ -70,6 +70,9 @@ class Order(db.Model):
     products = db.relationship('Product', secondary=order_product, lazy='subquery', backref=db.backref('orders', lazy=True))
     quantity = db.Column(db.Integer, nullable=False)
     grocer_id = db.Column(db.Integer, db.ForeignKey('grocers.id'), nullable=False)
+
+    grocer = db.relationship('Grocer', back_populates='orders')
+
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     
     def __repr__(self):
