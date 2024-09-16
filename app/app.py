@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_migrate import Migrate
 from dotenv import load_dotenv
-import psycopg2
 from app.models import *
 import os
 from config import config
@@ -24,169 +23,115 @@ login_manager.init_app(app)
 login_manager.session_protection = 'strong'
 login_manager.login_view = 'login'
 
-db.configure_mappers()
+#db.configure_mappers()
 
 #initializing the database
 with app.app_context():
     db.create_all()
     
-@app.route('/signup/grocer', methods=['POST'])
-def create_grocer():
-    data = request.get_json()
-    name = data.get('name')
-    email = data.get('email')
-    phone_number = data.get('phone_number')
-    stall_name = data.get('stall_name')
-    stall_number = data.get('stall_number')
-    password = data.get('password')
-    
-    if Grocer.query.filter((Grocer.email == email) | (Grocer.phone_number == phone_number)).first():
-        return jsonify({"error": "Email or phone number exists"}), 400
-    
-    new_grocer = Grocer(name=name, email=email, phone_number=phone_number, stall_name=stall_name, stall_number=stall_number)
-    new_grocer.hash_password(password)
-    db.session.add(new_grocer)
-    db.session.commit()
-    
-    return jsonify({"message": "Grocer Registration Succesful"}), 201
-
-@app.route('/signup/farmer', methods=['POST'])
-def create_farmer():
+@app.route('/signup', methods=['POST'])
+def signup():
     data = request.get_json()
     name = data.get('name')
     email = data.get('email')
     phone_number = data.get('phone_number')
     password = data.get('password')
+    role = data.get('role')
     
-    if Farmer.query.filter((Farmer.email == email) | (Farmer.phone_number == phone_number)).first():
-        return jsonify({"Error": "Email or Phone Number exists"}), 400
+    if User.query.filter((User.email == email) | (User.phone_number == phone_number)).first():
+        return jsonify({"error": "two legends cannot coexist sorry, the email or phonenumber exists"}), 400 
     
-    new_farmer = Farmer(name=name, email=email,phone_number=phone_number)
-    new_farmer.hash_password(password)
-    db.session.add(new_farmer)
+    newUser = User(name=name, email=email, phone_number=phone_number, role=role)
+    newUser.hash_password(password)
+    db.session.add(newUser)
+    db.session.commit()
+
+    if role == 'farmer':
+        newFarmer = Farmer(user_id=newUser.id)
+        db.session.add(newFarmer)
+    elif role == 'grocer':
+        newGrocer = Grocer(user_id=newUser.id, store_name=data.get('store_name'))
+        db.session.add(newGrocer)
+
     db.session.commit()
     
-    return jsonify({"Message": "Farmer Registration Successful"}), 201
-
-@app.route('/login/grocer', methods=['POST'])
-def login_grocer():
+    return({"message": "user created successfully hooray"}), 201
+    
+@app.route('/login', methods=['POST'])
+def login():
     data = request.get_json()
     identifier = data.get('identifier')
     password = data.get('password')
     
-    grocer = Grocer.query.filter((Grocer.email == identifier) | (Grocer.phone_number == identifier)).first()
-    
-    if grocer and grocer.check_password(password):
-        login_user(grocer)
-        access_token = create_access_token(identity=grocer.id)
-        return jsonify(access_token=access_token), 200
-    else:
-        return jsonify({"error": "That's not correct sorry"}), 401
-    
-@app.route('/login/farmer', methods=['POST'])
-def login_farmer():
-    data = request.get_json()
-    identifier = data.get('identifier')
-    password = data.get('password')
-    
-    farmer = Farmer.query.filter((Farmer.email == identifier) | (Farmer.phone_number == identifier)).first()
-    
-    if farmer and farmer.check_password(password):
-        login_user(farmer)
-        access_token = create_access_token(identity=farmer.id)
-        return jsonify(access_token=access_token), 200
-    else:
-        return jsonify({"error": "Yeah something's not quite right try again"}), 401
-    
-@app.route('/products', methods=['GET'])
-@jwt_required()
-def view_products():
-    current_user_id = get_jwt_identity()
-    products = Product.query.all()
-    return jsonify([product.to_dict() for product in products]), 200
-
-@app.route('/products/create', methods=['POST'])
-@jwt_required()
-def create_products():
-    user = get_jwt_identity()
-    data = request.get_json()
-    name = data.get('name')
-    price = data.get('price')
-    farmer_name = current_user.name
-    
-    new_product = Product(name=name, price=price, farmer_name=farmer_name)
-    db.session.add(new_product)
-    db.session.commit()
-    
-    return jsonify("Product added"), 201
-
-@app.route('/orders/create', methods=['POST'])
-@jwt_required()
-def create_order():
-    user = get_jwt_identity()
-    data = request.get_json()
-    grocer_id = user['id']
-    product_ids = data.get('product_ids')
-    
-    grocer = Grocer.query.get(grocer_id)
-    if not grocer:
-        return jsonify({"Error": "Grocer not found"}), 400
-    
-    products = Product.query.filter(Product.id.in_(product_ids)).all()
-    if not products:
-        return jsonify({"Error": "products not found"}), 401
-    
-    new_order = Order(grocer_id=grocer.id, products=products)
-    db.session.add(new_order)
-    db.session.commit()
-    
-    return jsonify({"Message": "Order created successfully"}), 201
-
-@app.route('/orders', methods=['GET'])
-@jwt_required()
-def get_farmerOrders():
-    user = get_jwt_identity()
-    farmer_id = user['id']
-    
-    orders = Order.query.join(order_product).join(Product).filter(Product.farmer_id == farmer_id).all()
-    order_list = []
-    for order in orders:
-        order_details = {
-            "order_id": order.id,
-            "grocer_name": order.grocer.name,
-            "products": [{"name": product.name, "price": product.price} for product in order.products],
-            "quantity": order.quantity,
-            "created_at": order.created_at
-        }
-        order_list.append(order_details)
+    user = User.query.filter((User.email == identifier) | (User.phone_number == identifier)).first()
+    if user and user.check_password(password):
+        login_user(user)
+        access_token = create_access_token(identity=user.id)
+        session_token = str(access_token)
+        newSession = LoginSession(user_id=user.id, session_token=session_token)
+        db.session.add(newSession)
+        db.commit()
         
-    return jsonify({"farmer_id": farmer_id, "orders": order_list}), 200
+        return jsonify(access_token=access_token), 200
+    else:
+        return jsonify({"error": "we've got an imposter"}), 401
 
-@app.route('/my_orders', methods=['GET'])
+@app.route('/logout', methods=['POST'])
 @jwt_required()
-def get_grocerOrders():
-    user = get_jwt_identity()
-    grocer_id = user['id']
+def logout():
+    user_id = get_jwt_identity()
+    session_token = request.headers.get('session_token') or request.json.get('session_token')
+    session = LoginSession.query.filter_by(user_id=user_id, session_token=session_token, logout_time=None).first()
     
-    orders = Order.query.filter_by(grocer_id=grocer_id).all()
-    order_list = []
-    for order in orders:
-        order_details = {
-            "order_id": order.id,
-            "products": [
-                {
+    if session:
+        session.logout_time = db.func.current_timestamp()
+        db.session.commit()
+        
+        return jsonify({"message": "Logout successful, session terminated"}), 200
+    else:
+        return jsonify({"error": "No active session found"}), 400
+    
+@app.route('/products', methods=['GET', 'POST'])
+@jwt_required()
+def products():
+    userId = get_jwt_identity()
+    if request.method == 'GET':
+        products = Product.query.all()
+        productList = []
+        
+        for product in products:
+            farmersName = product.farmer.user.name
+            productDetails = {
                 "name": product.name,
-                "price": product.price,
-                "farmer": product.farmer.name
-                } for product in order.products
-            ],
-            "quantity": order.quantity,
-            "created_at": order.created_at
-        }
-        order_list.append(order_details)
+                "description": product.description,
+                "quantity": product.quantity_available,
+                "price": product.price_per_unit,
+                "farmer": farmersName
+            }
+            productList.append(productDetails)
         
-    return jsonify({"grocer_id": grocer_id, "orders": order_list}), 200
-
+        return jsonify(productList)
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        # Check if the user is a farmer
+        farmer = Farmer.query.filter_by(user_id=userId).first()
+        
+        if not farmer:
+            return jsonify({"error": "Only farmers can add products"}), 403
+        
+        name = data.get('name')
+        description = data.get('description')
+        quantity_available = data.get('quantity_available')
+        price_per_unit = data.get('price_per_unit')
+        
+        newProduct = Product(farmer_id=farmer.id, name=name, description=description,
+                             quantity_available=quantity_available, price_per_unit=price_per_unit)
+        db.session.add(newProduct)
+        db.session.commit()
+        
+        return jsonify({"message": "product created"}), 201
+        
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
