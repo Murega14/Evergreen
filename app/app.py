@@ -131,7 +131,88 @@ def products():
         db.session.commit()
         
         return jsonify({"message": "product created"}), 201
+    
+@app.route('/orders', methods=['GET', 'POST'])
+@jwt_required()
+def orders():
+    userId = get_jwt_identity()
+    
+    if request.method == 'GET':
+        orders = Order.query.filter_by(grocer_id=userId).all()
+        orderList = []
         
+        for order in orders:
+            grocerName = order.grocer.user.name
+            productList = []
+            totalAmount = 0
+            
+            for item in order.order_items:
+                product = item.product
+                productDetails = {
+                    "product_name": product.name,
+                    "quantity_ordered": item.quantity_ordered,
+                    "price_per_unit": product.price_per_unit
+                }
+                productList.append(productDetails)
+                
+                totalAmount += item.quantity_ordered * product.price_per_unit
+                
+            
+            
+            orderDetails = {
+                "grocer": order.grocer.user.name,
+                "products": productList,
+                "total_amount": totalAmount,
+                "order_date": order.order_date
+            }
+            orderList.append(orderDetails)
+            
+        return jsonify(orderList), 200
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        orderItems = data.get('order_items')
+        
+        if not orderItems:
+            return jsonify({"error": "no items in the order oops"}), 400
+        
+        totalAmount = 0
+        orderItemList = []
+        
+        for item in orderItems:
+            product_id = item.get('product_id')
+            quantity_ordered = item.get('quantity')
+            
+            product = Product.query.filter_by(id=product_id).first()
+            
+            if not product:
+                return jsonify({"error": "product not found"}), 400
+            
+            if product.quantity_available < quantity_ordered:
+                return jsonify({"error": f"we don't have that much sorry, there's only {product.quantity_available}"})
+            
+            totalPrice = product.price * quantity_ordered
+            totalAmount += totalPrice
+            
+            orderItem = OrderItem(
+                product_id=product.id,
+                quantity_ordered=quantity_ordered,
+                price_per_unit=product.price_per_unit,
+                total_price=totalPrice
+            )
+            orderItemList.append(orderItem)
+            
+            product.quantity_available -= quantity_ordered
+            
+        newOrder = Order(grocer_id=userId, total_amount=totalAmount)
+        db.session.add(newOrder)
+        db.session.flush()
+        
+        for orderItem in orderItemList:
+            orderItem.order_id = newOrder.id
+            db.session.add(orderItem)
+            
+        db.session.commit()
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
