@@ -12,6 +12,7 @@ flask-login = "*"
 flask-sqlalchemy = "*"
 werkzeug = "*"
 sqlalchemy = "*"
+pytest = "*"
 
 [dev-packages]
 
