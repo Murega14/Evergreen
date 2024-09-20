@@ -1,6 +1,6 @@
 import pytest
 from app import app, db
-from app.models import User, Farmer, Grocer, Product, Order, OrderItem
+from models import User, Farmer, Grocer, Product, Order, OrderItem
 from flask_jwt_extended import create_access_token
 
 @pytest.fixture
