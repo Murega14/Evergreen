@@ -70,7 +70,7 @@ def login():
         session_token = str(access_token)
         newSession = LoginSession(user_id=user.id, session_token=session_token)
         db.session.add(newSession)
-        db.commit()
+        db.session.commit()
         
         return jsonify(access_token=access_token), 200
     else:
@@ -136,38 +136,15 @@ def products():
 @jwt_required()
 def orders():
     userId = get_jwt_identity()
+    user = User.query.get(userId)
     
     if request.method == 'GET':
-        orders = Order.query.filter_by(grocer_id=userId).all()
-        orderList = []
-        
-        for order in orders:
-            grocerName = order.grocer.user.name
-            productList = []
-            totalAmount = 0
-            
-            for item in order.order_items:
-                product = item.product
-                productDetails = {
-                    "product_name": product.name,
-                    "quantity_ordered": item.quantity_ordered,
-                    "price_per_unit": product.price_per_unit
-                }
-                productList.append(productDetails)
-                
-                totalAmount += item.quantity_ordered * product.price_per_unit
-                
-            
-            
-            orderDetails = {
-                "grocer": order.grocer.user.name,
-                "products": productList,
-                "total_amount": totalAmount,
-                "order_date": order.order_date
-            }
-            orderList.append(orderDetails)
-            
-        return jsonify(orderList), 200
+        if user.role == 'farmer':
+            return getFarmerOrders(user)
+        elif user.role == 'grocer':
+            return getGrocerOrders(user)
+        else:
+            return jsonify({"error": "Invalid. Unauthorized access"}), 403
     
     if request.method == 'POST':
         data = request.get_json()
@@ -191,7 +168,7 @@ def orders():
             if product.quantity_available < quantity_ordered:
                 return jsonify({"error": f"we don't have that much sorry, there's only {product.quantity_available}"})
             
-            totalPrice = product.price * quantity_ordered
+            totalPrice = product.price_per_unit * quantity_ordered
             totalAmount += totalPrice
             
             orderItem = OrderItem(
@@ -213,6 +190,72 @@ def orders():
             db.session.add(orderItem)
             
         db.session.commit()
+        
+        return jsonify({"message": "order created"}), 201
+
+def getFarmerOrders(user):
+    farmer = Farmer.query.filter_by(user_id=user.id).first()
+    if not farmer:
+        return jsonify({"message": "farmer profile not found"}), 404
+    
+    orders = Order.query.join(OrderItem).join(Product).filter(Product.farmer_id == farmer.id).distinct().all()
+    
+    orderList = []
+    for order in orders:
+        grocer = order.grocer
+        productList = []
+        
+        for item in order.items:
+            if item.product.farmer_id == farmer.id:
+                productDetails = {
+                    "product_name": item.product.name,
+                    "quantity_ordered": item.quantity_ordered,
+                    "price_per_unit": item.price_per_unit
+                }
+                productList.append(productDetails)
+                
+        totalAmount = sum(item.total_price for item in order.items if item.product.farmer_id == farmer.id)
+            
+        orderDetails = {
+            "order_id": order.id,
+            "products": productList,
+            "total_amount": totalAmount,
+            "order_date": order.order_date
+        }
+        orderList.append(orderDetails)
+            
+    return jsonify(orderList), 200
+
+def getGrocerOrders(user):
+    grocer = Grocer.query.filter_by(user_id=user.id).first()
+    if not grocer:
+        return jsonify({"message": "Grocer profile not found"}), 404
+    
+    orders = Order.query.filter_by(grocer_id=grocer.id).all()
+    
+    orderList = []
+    for order in orders:
+        productList = []
+        
+        for item in order.items:
+            productDetails = {
+                "product_name": item.product.name,
+                "farmer_name": item.product.farmer.user.name,
+                "quantity_ordered": item.quantity_ordered,
+                "price_per_unit": item.price_per_unit,
+                "total_price": item.total_price
+            }
+            productList.append(productDetails)
+        
+        orderDetails = {
+            "order_id": order.id,
+            "products": productList,
+            "total_amount": order.total_amount,
+            "order_date": order.order_date
+        }
+        orderList.append(orderDetails)
+        
+    return jsonify(orderList), 200
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
