@@ -202,7 +202,6 @@ def getFarmerOrders(user):
     
     orderList = []
     for order in orders:
-        grocer = order.grocer
         productList = []
         
         for item in order.items:
@@ -216,13 +215,16 @@ def getFarmerOrders(user):
                 
         totalAmount = sum(item.total_price for item in order.items if item.product.farmer_id == farmer.id)
             
+        grocerName = order.grocer.user.name if order.grocer and order.grocer.user else "Unknown"
         orderDetails = {
             "order_id": order.id,
+            "grocer_name": grocerName,
             "products": productList,
             "total_amount": totalAmount,
             "order_date": order.order_date
         }
         orderList.append(orderDetails)
+        
             
     return jsonify(orderList), 200
 
@@ -238,6 +240,7 @@ def getGrocerOrders(user):
         productList = []
         
         for item in order.items:
+            grocerName = item.order.grocer.user.name
             productDetails = {
                 "product_name": item.product.name,
                 "farmer_name": item.product.farmer.user.name,
@@ -249,6 +252,7 @@ def getGrocerOrders(user):
         
         orderDetails = {
             "order_id": order.id,
+            "grocer_name": grocerName,
             "products": productList,
             "total_amount": order.total_amount,
             "order_date": order.order_date
