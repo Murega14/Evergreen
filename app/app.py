@@ -1,12 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_migrate import Migrate
 from dotenv import load_dotenv
 from app.models import *
 import os
 from config import config
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from flask_login import LoginManager, login_user, logout_user, current_user
-
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from datetime import timedelta
 
 load_dotenv()
 
@@ -18,10 +19,6 @@ db.init_app(app)
 migrate = Migrate(app, db)
 jwt = JWTManager(app)
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.session_protection = 'strong'
-login_manager.login_view = 'login'
 
 #db.configure_mappers()
 
@@ -29,7 +26,12 @@ login_manager.login_view = 'login'
 with app.app_context():
     db.create_all()
     
+limiter = Limiter(app,
+                  key_func=get_remote_address,
+                  default_limits=["200 per day", "50 per hour", "10 per minute"])
+    
 @app.route('/signup', methods=['POST'])
+@limiter.limit
 def signup():
     data = request.get_json()
     name = data.get('name')
@@ -37,6 +39,9 @@ def signup():
     phone_number = data.get('phone_number')
     password = data.get('password')
     role = data.get('role')
+    
+    if not all(name, email, phone_number, password, role):
+        return jsonify({"error": "all fields are required"})
     
     if User.query.filter((User.email == email) | (User.phone_number == phone_number)).first():
         return jsonify({"error": "two legends cannot coexist sorry, the email or phonenumber exists"}), 400 
@@ -58,6 +63,7 @@ def signup():
     return({"message": "user created successfully hooray"}), 201
     
 @app.route('/login', methods=['POST'])
+@limiter.limit
 def login():
     data = request.get_json()
     identifier = data.get('identifier')
@@ -65,14 +71,16 @@ def login():
     
     user = User.query.filter((User.email == identifier) | (User.phone_number == identifier)).first()
     if user and user.check_password(password):
-        login_user(user)
-        access_token = create_access_token(identity=user.id)
-        session_token = str(access_token)
-        newSession = LoginSession(user_id=user.id, session_token=session_token)
-        db.session.add(newSession)
-        db.session.commit()
+        expires = timedelta(hours=1)
+        access_token = create_access_token(identity=user.id, expires_delta=expires)
         
-        return jsonify(access_token=access_token), 200
+        response = make_response(jsonify({"login": "success"}))
+        response.set_cookie("session_token",
+                            access_token,
+                            httponly=True,
+                            secure=True)
+        
+        return jsonify(response), 200
     else:
         return jsonify({"error": "we've got an imposter"}), 401
 
@@ -92,6 +100,7 @@ def logout():
         return jsonify({"error": "No active session found"}), 400
     
 @app.route('/products', methods=['GET', 'POST'])
+@limiter.limit
 @jwt_required()
 def products():
     userId = get_jwt_identity()
@@ -110,7 +119,7 @@ def products():
             }
             productList.append(productDetails)
         
-        return jsonify(productList)
+        return jsonify(productList), 200
     
     if request.method == 'POST':
         data = request.get_json()
@@ -133,6 +142,7 @@ def products():
         return jsonify({"message": "product created"}), 201
     
 @app.route('/orders', methods=['GET', 'POST'])
+@limiter.limit
 @jwt_required()
 def orders():
     userId = get_jwt_identity()

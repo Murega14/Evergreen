@@ -1,6 +1,6 @@
 import pytest
-from app import app, db
-from models import User, Farmer, Grocer, Product, Order, OrderItem
+from app.app import app, db
+from app.models import User, Farmer, Grocer, Product, Order, OrderItem
 from flask_jwt_extended import create_access_token
 
 @pytest.fixture
@@ -19,9 +19,9 @@ def client():
 
 @pytest.fixture
 def auth_headers(client):
-    user = User(name="Test User", email="test@example.com", phone_number="1234567890", role="farmer")
-    user.hash_password("password123")
     with app.app_context():
+        user = User(name="Test User", email="test@example.com", phone_number="1234567890", role="farmer")
+        user.hash_password("password123")
         db.session.add(user)
         db.session.commit()
         access_token = create_access_token(identity=user.id)
@@ -59,12 +59,12 @@ def test_login(client):
     assert 'access_token' in response.json
 
 def test_logout(client, auth_headers):
-    response = client.post('/logout', headers=auth_headers)
+    response = client.post('/logout', headers=auth_headers, content_type='application/json')
     assert response.status_code == 200
     assert b"Logout successful" in response.data
 
 def test_get_products(client, auth_headers):
-    response = client.get('/products', headers=auth_headers)
+    response = client.get('/products', headers=auth_headers, content_type='application/json')
     assert response.status_code == 200
     assert isinstance(response.json, list)
 
@@ -79,7 +79,7 @@ def test_create_product(client, auth_headers):
     assert b"product created" in response.data
 
 def test_get_orders_farmer(client, auth_headers):
-    response = client.get('/orders', headers=auth_headers)
+    response = client.get('/orders', headers=auth_headers, content_type='application/json')
     assert response.status_code == 200
     assert isinstance(response.json, list)
 
