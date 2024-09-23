@@ -33,11 +33,12 @@ class DevelopmentConfig(Config):
     #TESTING = True
     #SQLALCHEMY_DATABASE_URI = []
 
-#class ProductionConfig(Config):
-    #DEBUG = False
-    #SQLALCHEMY_DATABASE_URI = []
+class ProductionConfig(Config):
+    DEBUG = False
+    SQLALCHEMY_DATABASE_URI = os.getenv('PROD_DATABASE')
 
 config = {
     'development': DevelopmentConfig,
-    'default': DevelopmentConfig
+    'default': DevelopmentConfig,
+    'prod': ProductionConfig
 }

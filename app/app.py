@@ -5,14 +5,12 @@ from app.models import *
 import os
 from config import config
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from datetime import timedelta
 
 load_dotenv()
 
 app = Flask(__name__)
-config_name = os.getenv("FLASK_CONFIG", "default")
+config_name = os.getenv("FLASK_CONFIG", "prod")
 app.config.from_object(config[config_name])
 
 db.init_app(app)
@@ -26,12 +24,7 @@ jwt = JWTManager(app)
 with app.app_context():
     db.create_all()
     
-limiter = Limiter(app,
-                  key_func=get_remote_address,
-                  default_limits=["200 per day", "50 per hour", "10 per minute"])
-    
 @app.route('/signup', methods=['POST'])
-@limiter.limit
 def signup():
     data = request.get_json()
     name = data.get('name')
@@ -63,7 +56,6 @@ def signup():
     return({"message": "user created successfully hooray"}), 201
     
 @app.route('/login', methods=['POST'])
-@limiter.limit
 def login():
     data = request.get_json()
     identifier = data.get('identifier')
@@ -100,7 +92,6 @@ def logout():
         return jsonify({"error": "No active session found"}), 400
     
 @app.route('/products', methods=['GET', 'POST'])
-@limiter.limit
 @jwt_required()
 def products():
     userId = get_jwt_identity()
@@ -142,7 +133,6 @@ def products():
         return jsonify({"message": "product created"}), 201
     
 @app.route('/orders', methods=['GET', 'POST'])
-@limiter.limit
 @jwt_required()
 def orders():
     userId = get_jwt_identity()
