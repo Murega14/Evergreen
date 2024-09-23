@@ -23,6 +23,10 @@ jwt = JWTManager(app)
 #initializing the database
 with app.app_context():
     db.create_all()
+
+@app.route('/')
+def home():
+    return f"welcome to Evergreen"
     
 @app.route('/signup', methods=['POST'])
 def signup():
