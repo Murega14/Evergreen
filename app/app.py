@@ -6,7 +6,7 @@ import os
 from app.config import config
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from datetime import timedelta
-from .template import *
+from .templates import *
 
 load_dotenv()
 
