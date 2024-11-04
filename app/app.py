@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, render_template
 from flask_migrate import Migrate
 from dotenv import load_dotenv
 from app.models import *
@@ -26,7 +26,7 @@ with app.app_context():
 
 @app.route('/')
 def home():
-    return f"welcome to Evergreen"
+    return render_template('index.html')
     
 @app.route('/signup', methods=['POST'])
 def signup():
